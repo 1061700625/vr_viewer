@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>全景视频浏览</title>
+
+  <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
+
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+
+    .toolbar {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      z-index: 20;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .btn, .file-label {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 14px;
+      border: 0;
+      border-radius: 10px;
+      font-size: 14px;
+      cursor: pointer;
+      background: rgba(255,255,255,0.92);
+      color: #111;
+    }
+
+    .file-label input {
+      display: none;
+    }
+
+    #status {
+      color: #fff;
+      font-size: 14px;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <label class="file-label">
+      上传视频
+      <input id="videoUploader" type="file" accept="video/*" />
+    </label>
+    <button id="playBtn" class="btn" type="button">播放</button>
+    <button id="pauseBtn" class="btn" type="button">暂停</button>
+    <span id="status">当前使用默认视频</span>
+  </div>
+
+  <a-scene embedded>
+    <a-assets>
+      <video
+        id="panoVideo"
+        src="demo.mp4"
+        preload="auto"
+        loop
+        crossorigin="anonymous"
+        playsinline
+        webkit-playsinline
+      ></video>
+    </a-assets>
+
+    <a-videosphere id="videoSphere" src="#panoVideo" rotation="0 -90 0"></a-videosphere>
+    <a-camera look-controls="mouseEnabled: true; touchEnabled: true"></a-camera>
+  </a-scene>
+
+  <script>
+    const playBtn = document.getElementById("playBtn");
+    const pauseBtn = document.getElementById("pauseBtn");
+    const uploader = document.getElementById("videoUploader");
+    const status = document.getElementById("status");
+    const video = document.getElementById("panoVideo");
+
+    let currentObjectUrl = null;
+
+    async function safePlay() {
+      try {
+        await video.play();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    playBtn.addEventListener("click", safePlay);
+
+    pauseBtn.addEventListener("click", () => {
+      video.pause();
+    });
+
+    uploader.addEventListener("change", async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      try {
+        video.pause();
+
+        if (currentObjectUrl) {
+          URL.revokeObjectURL(currentObjectUrl);
+          currentObjectUrl = null;
+        }
+
+        currentObjectUrl = URL.createObjectURL(file);
+        video.src = currentObjectUrl;
+        video.load();
+
+        status.textContent = `当前视频：${file.name}`;
+
+        await safePlay();
+      } catch (err) {
+        console.error(err);
+        status.textContent = "加载失败，请重新选择视频";
+      }
+    });
+
+    window.addEventListener("beforeunload", () => {
+      if (currentObjectUrl) {
+        URL.revokeObjectURL(currentObjectUrl);
+      }
+    });
+  </script>
+</body>
+</html>
