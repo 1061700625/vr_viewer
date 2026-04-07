@@ -382,36 +382,38 @@ if ($currentRef !== '' && $videoUrl !== '') {
   </style>
 </head>
 <body>
-  <div class="panel">
-    <form id="uploadForm" method="post" enctype="multipart/form-data">
-      <div class="row">
-        <input id="videoInput" class="inputFile" type="file" name="video" accept="video/mp4" required>
-        <button id="uploadBtn" class="btn" type="submit">上传并生成链接</button>
-      </div>
-      <div id="selectedFileName" class="fileName">当前未选择文件</div>
+  <?php if ($currentRef === ''): ?>
+    <div class="panel">
+      <form id="uploadForm" method="post" enctype="multipart/form-data">
+        <div class="row">
+          <input id="videoInput" class="inputFile" type="file" name="video" accept="video/mp4" required>
+          <button id="uploadBtn" class="btn" type="submit">上传并生成链接</button>
+        </div>
+        <div id="selectedFileName" class="fileName">当前未选择文件</div>
 
-      <div id="progressWrap" class="progressWrap">
-        <progress id="uploadProgress" class="progressBar" value="0" max="100"></progress>
-        <div id="uploadStatus" class="progressText">准备上传</div>
+        <div id="progressWrap" class="progressWrap">
+          <progress id="uploadProgress" class="progressBar" value="0" max="100"></progress>
+          <div id="uploadStatus" class="progressText">准备上传</div>
+        </div>
+      </form>
+      <div class="hint">
+        上传 mp4 后会自动按文件名生成分享链接。桌面端可用鼠标滚轮缩放，手机端可双指捏合缩放
       </div>
-    </form>
-    <div class="hint">
-      上传 mp4 后会自动按文件名生成分享链接。桌面端可用鼠标滚轮缩放，手机端可双指捏合缩放
+
+      <?php if ($uploaded && $shareUrl): ?>
+        <div class="share ok">上传成功，分享链接：<a style="color:#9ad1ff" href="<?= h($shareUrl) ?>"><?= h($shareUrl) ?></a></div>
+      <?php endif; ?>
+
+      <?php if ($message !== ''): ?>
+        <div class="msg"><?= h($message) ?></div>
+      <?php endif; ?>
     </div>
-
-    <?php if ($uploaded && $shareUrl): ?>
-      <div class="share ok">上传成功，分享链接：<a style="color:#9ad1ff" href="<?= h($shareUrl) ?>"><?= h($shareUrl) ?></a></div>
-    <?php endif; ?>
-
-    <?php if ($message !== ''): ?>
-      <div class="msg"><?= h($message) ?></div>
-    <?php endif; ?>
-  </div>
+  <?php endif; ?>
   <button id="resetZoomBtn" class="btn" type="button">复原缩放</button>
 
   <button id="enterBtn">进入全景视频</button>
 
-  <a-scene embedded>
+  <a-scene embedded device-orientation-permission-ui>
     <a-assets>
       <video
         id="panoVideo"
@@ -426,7 +428,12 @@ if ($currentRef !== '' && $videoUrl !== '') {
     </a-assets>
 
     <a-videosphere src="#panoVideo" rotation="0 -90 0"></a-videosphere>
-    <a-camera id="mainCamera" camera="fov: 80" look-controls="mouseEnabled: true; touchEnabled: true" zoom-controls="minFov: 30; maxFov: 100; wheelStep: 4; pinchStep: 0.15"></a-camera>
+    <a-camera
+      id="mainCamera"
+      camera="fov: 80"
+      look-controls="mouseEnabled: true; touchEnabled: true; magicWindowTrackingEnabled: true"
+      zoom-controls="minFov: 30; maxFov: 100; wheelStep: 4; pinchStep: 0.15">
+    </a-camera>
   </a-scene>
 
   <script>
