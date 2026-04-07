@@ -148,37 +148,54 @@ if ($currentRef !== '' && $videoUrl !== '') {
   <script>
     AFRAME.registerComponent('zoom-controls', {
       schema: {
-        minFov: {type: 'number', default: 10},
-        maxFov: {type: 'number', default: 200},
-        wheelStep: {type: 'number', default: 4},
-        pinchStep: {type: 'number', default: 0.15}
+        defaultFov: { type: 'number', default: 86 },
+        minFov: { type: 'number', default: 55 },
+        maxFov: { type: 'number', default: 110 },
+        wheelStep: { type: 'number', default: 3 },
+        pinchStep: { type: 'number', default: 0.10 }
       },
 
       init: function () {
         this.camera = null;
         this.lastPinchDistance = 0;
+        this.bound = false;
+
         this.onWheel = this.onWheel.bind(this);
         this.onTouchStart = this.onTouchStart.bind(this);
         this.onTouchMove = this.onTouchMove.bind(this);
         this.onTouchEnd = this.onTouchEnd.bind(this);
-        this.setup = this.setup.bind(this);
+        this.trySetup = this.trySetup.bind(this);
+        this.onObject3DSet = this.onObject3DSet.bind(this);
 
-        if (this.el.sceneEl.hasLoaded) {
-          this.setup();
-        } else {
-          this.el.sceneEl.addEventListener('loaded', this.setup, {once: true});
+        this.trySetup();
+        this.el.addEventListener('object3dset', this.onObject3DSet);
+      },
+
+      onObject3DSet: function (e) {
+        if (e.detail && e.detail.type === 'camera') {
+          this.trySetup();
         }
       },
 
-      setup: function () {
-        this.camera = this.el.getObject3D('camera');
+      trySetup: function () {
+        if (this.bound) return;
+
+        const cameraComponent = this.el.components.camera;
+        this.camera = cameraComponent && cameraComponent.camera
+          ? cameraComponent.camera
+          : this.el.getObject3D('camera');
+
         if (!this.camera) return;
 
-        window.addEventListener('wheel', this.onWheel, {passive: false});
-        window.addEventListener('touchstart', this.onTouchStart, {passive: false});
-        window.addEventListener('touchmove', this.onTouchMove, {passive: false});
-        window.addEventListener('touchend', this.onTouchEnd, {passive: false});
-        window.addEventListener('touchcancel', this.onTouchEnd, {passive: false});
+        this.setFov(this.data.defaultFov);
+
+        window.addEventListener('wheel', this.onWheel, { passive: false });
+        window.addEventListener('touchstart', this.onTouchStart, { passive: false });
+        window.addEventListener('touchmove', this.onTouchMove, { passive: false });
+        window.addEventListener('touchend', this.onTouchEnd, { passive: false });
+        window.addEventListener('touchcancel', this.onTouchEnd, { passive: false });
+
+        this.bound = true;
       },
 
       clampFov: function (fov) {
@@ -186,7 +203,7 @@ if ($currentRef !== '' && $videoUrl !== '') {
       },
 
       reset: function () {
-        this.setFov(80);
+        this.setFov(this.data.defaultFov);
       },
 
       setFov: function (fov) {
@@ -198,9 +215,13 @@ if ($currentRef !== '' && $videoUrl !== '') {
 
       onWheel: function (e) {
         if (!this.camera) return;
+
         e.preventDefault();
-        const delta = e.deltaY > 0 ? this.data.wheelStep : -this.data.wheelStep;
-        this.setFov(this.camera.fov + delta);
+
+        const direction = Math.sign(e.deltaY);
+        if (direction === 0) return;
+
+        this.setFov(this.camera.fov + direction * this.data.wheelStep);
       },
 
       getTouchDistance: function (touches) {
@@ -238,11 +259,15 @@ if ($currentRef !== '' && $videoUrl !== '') {
       },
 
       remove: function () {
+        this.el.removeEventListener('object3dset', this.onObject3DSet);
+
         window.removeEventListener('wheel', this.onWheel);
         window.removeEventListener('touchstart', this.onTouchStart);
         window.removeEventListener('touchmove', this.onTouchMove);
         window.removeEventListener('touchend', this.onTouchEnd);
         window.removeEventListener('touchcancel', this.onTouchEnd);
+
+        this.bound = false;
       }
     });
   </script>
@@ -414,7 +439,10 @@ if ($currentRef !== '' && $videoUrl !== '') {
   <button id="resetZoomBtn" class="btn" type="button">复原缩放</button>
   <button id="enterBtn">进入全景视频</button>
 
-  <a-scene embedded>
+  <a-scene
+    embedded
+    renderer="antialias: auto; colorManagement: true; precision: high; maxCanvasWidth: 1920; maxCanvasHeight: 1920"
+  >
     <a-assets>
       <video
         id="panoVideo"
@@ -430,8 +458,20 @@ if ($currentRef !== '' && $videoUrl !== '') {
       ></video>
     </a-assets>
 
-    <a-videosphere src="#panoVideo" rotation="0 -90 0"></a-videosphere>
-    <a-camera id="mainCamera" camera="fov: 80" look-controls="mouseEnabled: true; touchEnabled: true" zoom-controls="minFov: 30; maxFov: 100; wheelStep: 4; pinchStep: 0.15"></a-camera>
+    <a-videosphere
+      src="#panoVideo"
+      rotation="0 -90 0"
+      radius="5000"
+      segments-width="64"
+      segments-height="64"
+    ></a-videosphere>
+
+    <a-camera
+      id="mainCamera"
+      camera="fov: 88; near: 0.1; far: 6000"
+      look-controls="mouseEnabled: true; touchEnabled: true; reverseMouseDrag: true; reverseTouchDrag: false"
+      zoom-controls="defaultFov: 88; minFov: 55; maxFov: 112; wheelStep: 3; pinchStep: 0.12"
+    ></a-camera>
   </a-scene>
 
   <script>
