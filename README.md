@@ -4,6 +4,8 @@
 - index.html：支持上传视频后浏览、拖动视角
 - index.php：支持上传视频后浏览、拖动视角、缩放、分享链接、手机姿态控制视角(需开启获取方向权限)等
 
+[demo](https://www.xfxuezhang.cn/web/vrview/?ref=demo)
+
 ---
 
 对于PHP，记得修改php.ini配置：
