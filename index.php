@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 mb_internal_encoding('UTF-8');
@@ -47,13 +48,13 @@ $isAjax = is_ajax_request();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!isset($_FILES['video'])) {
-      $contentLength = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
-      if ($contentLength > 0 && empty($_POST) && empty($_FILES)) {
-          $message = '上传失败，通常是文件超过了服务器请求体限制';
-      } else {
-          $message = '没有收到视频文件';
-      }
-  } else {
+        $contentLength = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+        if ($contentLength > 0 && empty($_POST) && empty($_FILES)) {
+            $message = '上传失败，通常是文件超过了服务器请求体限制';
+        } else {
+            $message = '没有收到视频文件';
+        }
+    } else {
         $file = $_FILES['video'];
 
         if (!is_array($file)) {
@@ -409,11 +410,11 @@ if ($currentRef !== '' && $videoUrl !== '') {
       <?php endif; ?>
     </div>
   <?php endif; ?>
-  <button id="resetZoomBtn" class="btn" type="button">复原缩放</button>
 
+  <button id="resetZoomBtn" class="btn" type="button">复原缩放</button>
   <button id="enterBtn">进入全景视频</button>
 
-  <a-scene embedded device-orientation-permission-ui>
+  <a-scene embedded>
     <a-assets>
       <video
         id="panoVideo"
@@ -424,16 +425,13 @@ if ($currentRef !== '' && $videoUrl !== '') {
         crossorigin="anonymous"
         playsinline
         webkit-playsinline
+        x5-video-player-type="h5"
+        x5-video-player-fullscreen="false"
       ></video>
     </a-assets>
 
     <a-videosphere src="#panoVideo" rotation="0 -90 0"></a-videosphere>
-    <a-camera
-      id="mainCamera"
-      camera="fov: 80"
-      look-controls="mouseEnabled: true; touchEnabled: true; magicWindowTrackingEnabled: true"
-      zoom-controls="minFov: 30; maxFov: 100; wheelStep: 4; pinchStep: 0.15">
-    </a-camera>
+    <a-camera id="mainCamera" camera="fov: 80" look-controls="mouseEnabled: true; touchEnabled: true" zoom-controls="minFov: 30; maxFov: 100; wheelStep: 4; pinchStep: 0.15"></a-camera>
   </a-scene>
 
   <script>
@@ -448,79 +446,85 @@ if ($currentRef !== '' && $videoUrl !== '') {
     const video = document.getElementById('panoVideo');
     const resetZoomBtn = document.getElementById('resetZoomBtn');
     const mainCameraEl = document.getElementById('mainCamera');
-    const defaultFov = 80;
 
     const params = new URLSearchParams(window.location.search);
     const refFromUrl = params.get('ref');
 
-    videoInput.addEventListener('change', () => {
-      const file = videoInput.files && videoInput.files[0];
-      selectedFileName.textContent = file ? `已选择文件：${file.name}` : '当前未选择文件';
-    });
+    if (videoInput && selectedFileName) {
+      videoInput.addEventListener('change', () => {
+        const file = videoInput.files && videoInput.files[0];
+        selectedFileName.textContent = file ? `已选择文件：${file.name}` : '当前未选择文件';
+      });
+    }
 
-    uploadForm.addEventListener('submit', function (e) {
-      e.preventDefault();
+    if (uploadForm) {
+      uploadForm.addEventListener('submit', function (e) {
+        e.preventDefault();
 
-      const file = videoInput.files && videoInput.files[0];
-      if (!file) {
-        uploadStatus.textContent = '请先选择 mp4 文件';
-        progressWrap.style.display = 'block';
-        return;
-      }
-
-      const formData = new FormData(uploadForm);
-      const xhr = new XMLHttpRequest();
-
-      uploadBtn.disabled = true;
-      progressWrap.style.display = 'block';
-      uploadProgress.value = 0;
-      uploadStatus.textContent = '开始上传...';
-
-      xhr.open('POST', window.location.pathname + window.location.search, true);
-      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-
-      xhr.upload.addEventListener('progress', function (e) {
-        if (!e.lengthComputable) {
-          uploadStatus.textContent = '正在上传...';
+        const file = videoInput.files && videoInput.files[0];
+        if (!file) {
+          if (uploadStatus && progressWrap) {
+            uploadStatus.textContent = '请先选择 mp4 文件';
+            progressWrap.style.display = 'block';
+          }
           return;
         }
 
-        const percent = Math.round((e.loaded / e.total) * 100);
-        uploadProgress.value = percent;
-        uploadStatus.textContent = `正在上传 ${percent}%`;
-      });
+        const formData = new FormData(uploadForm);
+        const xhr = new XMLHttpRequest();
 
-      xhr.addEventListener('load', function () {
-        uploadBtn.disabled = false;
+        if (uploadBtn) uploadBtn.disabled = true;
+        if (progressWrap) progressWrap.style.display = 'block';
+        if (uploadProgress) uploadProgress.value = 0;
+        if (uploadStatus) uploadStatus.textContent = '开始上传...';
 
-        try {
-          const data = JSON.parse(xhr.responseText || '{}');
+        xhr.open('POST', window.location.pathname + window.location.search, true);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
 
-          if (xhr.status >= 200 && xhr.status < 300 && data.ok) {
-            uploadProgress.value = 100;
-            uploadStatus.textContent = '上传完成，正在跳转...';
-            window.location.href = data.redirect;
-          } else {
-            uploadStatus.textContent = data.message || '上传失败';
+        xhr.upload.addEventListener('progress', function (e) {
+          if (!uploadStatus) return;
+          if (!e.lengthComputable) {
+            uploadStatus.textContent = '正在上传...';
+            return;
           }
-        } catch (err) {
-          console.error(err);
-          uploadStatus.textContent = '服务器返回格式错误';
-        }
-      });
 
-      xhr.addEventListener('error', function () {
-        uploadBtn.disabled = false;
-        uploadStatus.textContent = '网络错误，上传失败';
-      });
+          const percent = Math.round((e.loaded / e.total) * 100);
+          if (uploadProgress) uploadProgress.value = percent;
+          uploadStatus.textContent = `正在上传 ${percent}%`;
+        });
 
-      xhr.addEventListener('abort', function () {
-        uploadBtn.disabled = false;
-        uploadStatus.textContent = '上传已取消';
-      });
+        xhr.addEventListener('load', function () {
+          if (uploadBtn) uploadBtn.disabled = false;
 
-      xhr.send(formData);
-    });
+          try {
+            const data = JSON.parse(xhr.responseText || '{}');
+
+            if (xhr.status >= 200 && xhr.status < 300 && data.ok) {
+              if (uploadProgress) uploadProgress.value = 100;
+              if (uploadStatus) uploadStatus.textContent = '上传完成，正在跳转...';
+              window.location.href = data.redirect;
+            } else if (uploadStatus) {
+              uploadStatus.textContent = data.message || '上传失败';
+            }
+          } catch (err) {
+            console.error(err);
+            if (uploadStatus) uploadStatus.textContent = '服务器返回格式错误';
+          }
+        });
+
+        xhr.addEventListener('error', function () {
+          if (uploadBtn) uploadBtn.disabled = false;
+          if (uploadStatus) uploadStatus.textContent = '网络错误，上传失败';
+        });
+
+        xhr.addEventListener('abort', function () {
+          if (uploadBtn) uploadBtn.disabled = false;
+          if (uploadStatus) uploadStatus.textContent = '上传已取消';
+        });
+
+        xhr.send(formData);
+      });
+    }
 
     async function safePlay() {
       if (!video || !video.getAttribute('src')) return false;
