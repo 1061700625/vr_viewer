@@ -25,3 +25,14 @@ max_input_time = 300
 sudo systemctl restart php8.1-fpm
 sudo systemctl restart apache2
 ```
+
+如果目录自动创建失败，可手动创建：
+```bash
+mkdir images
+sudo chgrp www-data images
+chmod 2775 images
+
+mkdir videos
+sudo chgrp www-data videos
+chmod 2775 videos
+```
