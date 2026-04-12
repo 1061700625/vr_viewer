@@ -21,7 +21,9 @@ function h(string $value): string {
 
 function sanitize_ref(?string $ref): string {
     $ref = trim((string)$ref);
-    return preg_replace('/[^a-zA-Z0-9_-]/', '', $ref) ?? '';
+    // 只过滤非法字符，保留中文
+    $ref = preg_replace('/[\\x00-\\x1F\\x7F\\/\\\\\\\\:*?"<>|]+/u', '', $ref) ?? '';
+    return trim($ref);
 }
 
 function upload_error_message(int $code): string {
@@ -588,6 +590,18 @@ if ($currentRef !== '' && $mediaUrl !== '' && $currentMediaType !== '') {
       color: #9fb3d1;
     }
 
+    .loadingOverlay {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
+        font-size: 16px;
+    }
+
     .emptyText,
     .hint,
     .msg,
@@ -819,6 +833,10 @@ if ($currentRef !== '' && $mediaUrl !== '' && $currentMediaType !== '') {
   <button id="resetZoomBtn" class="btn" type="button">复原缩放</button>
   <button id="enterBtn">进入全景内容</button>
 
+  <div id="loadingOverlay" class="loadingOverlay">
+    正在加载全景图片...
+  </div>
+
   <a-scene
     embedded
     renderer="antialias: auto; colorManagement: true; precision: high; maxCanvasWidth: 1920; maxCanvasHeight: 1920"
@@ -888,6 +906,7 @@ if ($currentRef !== '' && $mediaUrl !== '' && $currentMediaType !== '') {
     const sidebarItems = Array.from(document.querySelectorAll('.sidebarItem'));
     const sidebarTabs = Array.from(document.querySelectorAll('.sidebarTab'));
     const sidebarPanels = Array.from(document.querySelectorAll('.sidebarPanel'));
+    const loadingOverlay = document.getElementById('loadingOverlay');
 
     const params = new URLSearchParams(window.location.search);
     const refFromUrl = params.get('ref');
@@ -998,12 +1017,24 @@ if ($currentRef !== '' && $mediaUrl !== '' && $currentMediaType !== '') {
     function applyMediaType(type, mediaUrl) {
       currentType = type;
       if (type === 'image') {
+        if (loadingOverlay) loadingOverlay.style.display = 'flex';
+
         if (video) {
           video.pause();
           video.removeAttribute('src');
           video.load();
         }
         if (image) {
+          image.onload = () => {
+            if (loadingOverlay) loadingOverlay.style.display = 'none';
+          };
+
+          image.onerror = () => {
+            if (loadingOverlay) {
+                loadingOverlay.textContent = '图片加载失败';
+            }
+          };
+          
           image.setAttribute('src', mediaUrl);
         }
         if (videoSphere) {
@@ -1067,7 +1098,7 @@ if ($currentRef !== '' && $mediaUrl !== '' && $currentMediaType !== '') {
         setSidebarCollapsed(collapsed);
       });
 
-      setSidebarCollapsed(false);
+      setSidebarCollapsed(Boolean(refFromUrl) || window.innerWidth <= 900);
     }
 
     sidebarTabs.forEach(tab => {
@@ -1079,7 +1110,6 @@ if ($currentRef !== '' && $mediaUrl !== '' && $currentMediaType !== '') {
 
     sidebarItems.forEach(item => {
       item.addEventListener('click', async (e) => {
-        e.preventDefault();
         const { ref, type, mediaUrl, mediaName } = item.dataset;
         await switchMedia(ref, type, mediaUrl, mediaName, true);
       });
