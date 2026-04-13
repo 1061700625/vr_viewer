@@ -35,4 +35,8 @@ chmod 2775 images
 mkdir videos
 sudo chgrp www-data videos
 chmod 2775 videos
+
+touch visits.txt
+sudo chgrp www-data visits.txt
+chmod 2775 visits.txt
 ```
