@@ -6,6 +6,7 @@ mb_internal_encoding('UTF-8');
 
 $videosDir = __DIR__ . DIRECTORY_SEPARATOR . 'videos';
 $imagesDir = __DIR__ . DIRECTORY_SEPARATOR . 'images';
+$statsFile = __DIR__ . DIRECTORY_SEPARATOR . 'visits.txt';
 
 if (!is_dir($videosDir)) {
     mkdir($videosDir, 0775, true);
@@ -94,6 +95,66 @@ function detect_upload_kind(string $originalName, string $tmpName): array {
         'dir' => '',
         'message' => '目前支持 mp4、jpg、jpeg、png、webp',
     ];
+}
+
+function load_visit_stats(string $statsFile): array {
+    if (!is_file($statsFile)) {
+        return [];
+    }
+
+    $content = file_get_contents($statsFile);
+    if ($content === false || trim($content) === '') {
+        return [];
+    }
+
+    $stats = json_decode($content, true);
+    return is_array($stats) ? $stats : [];
+}
+
+function save_visit_stats(string $statsFile, array $stats): bool {
+    $dir = dirname($statsFile);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0775, true);
+    }
+
+    $json = json_encode($stats, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+    if ($json === false) {
+        return false;
+    }
+
+    return file_put_contents($statsFile, $json, LOCK_EX) !== false;
+}
+
+function make_visit_key(string $type, string $ref): string {
+    return $type . ':' . $ref;
+}
+
+function increase_visit_count(string $statsFile, string $type, string $ref): int {
+    if ($type === '' || $ref === '') {
+        return 0;
+    }
+
+    $stats = load_visit_stats($statsFile);
+    $key = make_visit_key($type, $ref);
+
+    $current = isset($stats[$key]) && is_int($stats[$key]) ? $stats[$key] : (int)($stats[$key] ?? 0);
+    $current++;
+    $stats[$key] = $current;
+
+    save_visit_stats($statsFile, $stats);
+
+    return $current;
+}
+
+function get_visit_count(string $statsFile, string $type, string $ref): int {
+    if ($type === '' || $ref === '') {
+        return 0;
+    }
+
+    $stats = load_visit_stats($statsFile);
+    $key = make_visit_key($type, $ref);
+
+    return isset($stats[$key]) ? (int)$stats[$key] : 0;
 }
 
 function get_media_list(string $videosDir, string $imagesDir): array {
@@ -275,6 +336,10 @@ if ($currentItem === null && $currentRef !== '') {
 $mediaUrl = $currentItem['url'] ?? '';
 $currentMediaName = $currentItem['name'] ?? '';
 $currentMediaType = $currentItem['type'] ?? '';
+$currentVisitCount = 0;
+if ($currentItem !== null && $currentRef !== '' && $currentMediaType !== '') {
+    $currentVisitCount = increase_visit_count($statsFile, $currentMediaType, $currentRef);
+}
 
 $shareUrl = '';
 if ($currentRef !== '' && $mediaUrl !== '' && $currentMediaType !== '') {
@@ -729,9 +794,55 @@ if ($currentRef !== '' && $mediaUrl !== '' && $currentMediaType !== '') {
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
     }
 
+    .visitBadge {
+      position: fixed;
+      left: 14px;
+      bottom: 12px;
+      z-index: 35;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      line-height: 1;
+      color: rgba(255, 255, 255, 0.62);
+      background: rgba(0, 0, 0, 0.24);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(6px);
+      pointer-events: none;
+      user-select: none;
+      letter-spacing: 0.2px;
+    }
+
+    body.sidebar-collapsed .visitBadge {
+      left: 14px;
+    }
+
+    .visitBadge {
+      position: fixed;
+      left: 14px;
+      bottom: 12px;
+      z-index: 35;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      line-height: 1;
+      color: rgba(255, 255, 255, 0.58);
+      background: rgba(0, 0, 0, 0.22);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(6px);
+      user-select: none;
+      pointer-events: none;
+    }
+
     @media (max-width: 900px) {
       :root {
         --sidebar-width: min(82vw, 300px);
+      }
+
+      .visitBadge {
+        left: 12px;
+        bottom: 12px;
+        font-size: 11px;
+        padding: 5px 9px;
       }
 
       .panel {
@@ -837,6 +948,10 @@ if ($currentRef !== '' && $mediaUrl !== '' && $currentMediaType !== '') {
     正在加载全景图片...
   </div>
 
+  <?php if ($currentItem !== null): ?>
+    <div class="visitBadge" aria-label="访问量统计">访问量 <?= (int)$currentVisitCount ?></div>
+  <?php endif; ?>
+
   <a-scene
     embedded
     renderer="antialias: auto; colorManagement: true; precision: high; maxCanvasWidth: 1920; maxCanvasHeight: 1920"
@@ -907,6 +1022,7 @@ if ($currentRef !== '' && $mediaUrl !== '' && $currentMediaType !== '') {
     const sidebarTabs = Array.from(document.querySelectorAll('.sidebarTab'));
     const sidebarPanels = Array.from(document.querySelectorAll('.sidebarPanel'));
     const loadingOverlay = document.getElementById('loadingOverlay');
+    const visitBadge = document.getElementById('visitBadge');
 
     const params = new URLSearchParams(window.location.search);
     const refFromUrl = params.get('ref');
@@ -1017,7 +1133,10 @@ if ($currentRef !== '' && $mediaUrl !== '' && $currentMediaType !== '') {
     function applyMediaType(type, mediaUrl) {
       currentType = type;
       if (type === 'image') {
-        if (loadingOverlay) loadingOverlay.style.display = 'flex';
+        if (loadingOverlay) {
+          loadingOverlay.textContent = '正在加载全景图片...';
+          loadingOverlay.style.display = 'flex';
+        }
 
         if (video) {
           video.pause();
@@ -1026,13 +1145,19 @@ if ($currentRef !== '' && $mediaUrl !== '' && $currentMediaType !== '') {
         }
         if (image) {
           image.onload = () => {
-            if (loadingOverlay) loadingOverlay.style.display = 'none';
+            if (loadingOverlay) {
+              loadingOverlay.style.display = 'none';
+            }
+            image.onload = null;
+            image.onerror = null;
           };
 
           image.onerror = () => {
             if (loadingOverlay) {
-                loadingOverlay.textContent = '图片加载失败';
+              loadingOverlay.textContent = '图片加载失败';
             }
+            image.onload = null;
+            image.onerror = null;
           };
           
           image.setAttribute('src', mediaUrl);
@@ -1066,7 +1191,7 @@ if ($currentRef !== '' && $mediaUrl !== '' && $currentMediaType !== '') {
       setActiveTab(type);
     }
 
-    async function switchMedia(ref, type, mediaUrl, mediaName, pushState = true) {
+    async function switchMedia(ref, type, mediaUrl, pushState = true) {
       if (!mediaUrl) return;
       const wasPaused = video ? video.paused : true;
       applyMediaType(type, mediaUrl);
@@ -1111,7 +1236,7 @@ if ($currentRef !== '' && $mediaUrl !== '' && $currentMediaType !== '') {
     sidebarItems.forEach(item => {
       item.addEventListener('click', async (e) => {
         const { ref, type, mediaUrl, mediaName } = item.dataset;
-        await switchMedia(ref, type, mediaUrl, mediaName, true);
+        await switchMedia(ref, type, mediaUrl, true);
       });
     });
 
@@ -1137,7 +1262,7 @@ if ($currentRef !== '' && $mediaUrl !== '' && $currentMediaType !== '') {
         || sidebarItems.find(item => item.dataset.ref === ref);
       if (!matchedItem) return;
       const { mediaUrl, mediaName } = matchedItem.dataset;
-      await switchMedia(ref, matchedItem.dataset.type, mediaUrl, mediaName, false);
+      await switchMedia(ref, matchedItem.dataset.type, mediaUrl, false);
     });
 
     async function initPlayback() {
@@ -1156,7 +1281,26 @@ if ($currentRef !== '' && $mediaUrl !== '' && $currentMediaType !== '') {
       }
     }
 
-    window.addEventListener('load', initPlayback);
+    function updateVisitCounter() {
+      if (!visitBadge) return;
+
+      const pageKey = 'pano_visit_count';
+      const sessionKey = 'pano_visit_session_mark';
+      let count = Number(localStorage.getItem(pageKey) || '0');
+
+      if (!sessionStorage.getItem(sessionKey)) {
+        count += 1;
+        localStorage.setItem(pageKey, String(count));
+        sessionStorage.setItem(sessionKey, '1');
+      }
+
+      visitBadge.textContent = `访问 ${count}`;
+    }
+
+    window.addEventListener('load', async () => {
+      updateVisitCounter();
+      await initPlayback();
+    });
   </script>
 </body>
 </html>
